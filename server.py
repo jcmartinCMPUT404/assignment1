@@ -1,6 +1,6 @@
 #  coding: utf-8 
 import socketserver
-
+import os
 # Copyright 2013 Abram Hindle, Eddie Antonio Santos
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,13 +28,50 @@ import socketserver
 
 
 class MyWebServer(socketserver.BaseRequestHandler):
-    
     def handle(self):
-        self.data = self.request.recv(1024).strip()
-        print ("Got a request of: %s\n" % self.data)
-        self.request.sendall(bytearray("OK",'utf-8'))
+        self.data = self.request.recv(1024).decode()
+        self.headers = self.data.split('\n')
+        self.method, self.file_name = self.headers[0].split()[0], self.headers[0].split()[1] 
+        # if header is get then go on 
+        if self.method == "GET":
+            response = self.process_file_name(self.file_name)
+        # if header is anything else return 405 Method not allowed
+        else:
+            response = 'HTTP/1.0 405 Method Not Allowed'
+        self.request.sendall(response.encode())
+            
+    def process_file_name(self, file_name):
+        # if the path doesn't end with / but it's a folder, redirect
+        if not file_name.endswith('/') and self.is_folder(file_name):
+            return f'HTTP/1.0 301 Moved Permanently\nLocation: http://127.0.0.1:8080{file_name}/\n\n'
+        # if the file ends with a / default to finding the index.html file in that folder
+        if file_name.endswith('/'):
+            file_name = file_name + 'index.html'
+        try:
+            fin = open('.'+file_name)
+            content = fin.read()
+            fin.close()
+            return 'HTTP/1.0 200 OK\n' + self.get_mime_type(file_name) + content
+        except:
+            return 'HTTP/1.0 404 Not FOUND\n\n'
+
+    def is_folder(self, file_name):
+        # it doesn't end with an extension
+        last_section = file_name.split('/')[-1]
+        if len(last_section.split('.')) == 1:
+            return True
+        return False
+    
+    def get_mime_type(self, file_name):
+        if file_name.endswith('.html'):
+            return 'Content-Type: text/html\n\n'
+        elif file_name.endswith('.css'):
+            return 'Content-Type: text/css\n\n'
+        else:
+            return 'Content-Type: text/plain\n\n'
 
 if __name__ == "__main__":
+    os.chdir('./www')
     HOST, PORT = "localhost", 8080
 
     socketserver.TCPServer.allow_reuse_address = True
