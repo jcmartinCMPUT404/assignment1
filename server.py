@@ -31,7 +31,7 @@ class MyWebServer(socketserver.BaseRequestHandler):
     def handle(self):
         self.data = self.request.recv(1024).decode()
         self.headers = self.data.split('\n')
-        self.method, self.file_name = self.headers[0].split()[0], self.headers[0].split()[1] 
+        self.method, self.file_name = self.headers[0].split()[0], self.headers[0].split()[1]
         # if header is get then go on 
         if self.method == "GET":
             response = self.process_file_name(self.file_name)
@@ -41,13 +41,15 @@ class MyWebServer(socketserver.BaseRequestHandler):
         self.request.sendall(response.encode())
             
     def process_file_name(self, file_name):
-        # if the path doesn't end with / but it's a folder, redirect
-        if not file_name.endswith('/') and self.is_folder(file_name):
-            return f'HTTP/1.0 301 Moved Permanently\nLocation: http://127.0.0.1:8080{file_name}/\n\n'
-        # if the file ends with a / default to finding the index.html file in that folder
-        if file_name.endswith('/'):
-            file_name = file_name + 'index.html'
         try:
+            # if it is a folder but it's missing a slash, redirect
+            if os.path.isdir(file_name[1:]+'/') and not file_name.endswith('/'):
+                return f'HTTP/1.1 301 Moved Permanently\nLocation: http://127.0.0.1:8080{file_name}/\n\n'
+            # if the file ends with a / default to finding the index.html file in that folder
+            if file_name.endswith('/'):
+                file_name = file_name + 'index.html'
+            if self.is_malicious(file_name):
+                raise Exception("Malicious")
             fin = open('.'+file_name)
             content = fin.read()
             fin.close()
@@ -55,13 +57,22 @@ class MyWebServer(socketserver.BaseRequestHandler):
         except:
             return 'HTTP/1.0 404 Not FOUND\n\n'
 
-    def is_folder(self, file_name):
-        # it doesn't end with an extension
-        last_section = file_name.split('/')[-1]
-        if len(last_section.split('.')) == 1:
-            return True
-        return False
-    
+    def is_malicious(self, file_name):
+        malicious = False
+        root_level = 0
+        current_level = 0
+        folder_parse = file_name.split('/')
+        for each in folder_parse:
+            if each == "..":
+                current_level -= 1
+            elif each == ".":
+                continue
+            else:
+                current_level += 1
+                if current_level == root_level:
+                    malicious = True if each != "root" else False
+        return malicious or current_level < root_level
+
     def get_mime_type(self, file_name):
         if file_name.endswith('.html'):
             return 'Content-Type: text/html\n\n'
