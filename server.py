@@ -58,8 +58,6 @@ class MyWebServer(socketserver.BaseRequestHandler):
             return 'HTTP/1.0 404 Not FOUND\n\n'
 
     def is_malicious(self, file_name):
-        malicious = False
-        root_level = 0
         current_level = 0
         folder_parse = file_name.split('/')
         for each in folder_parse:
@@ -69,9 +67,10 @@ class MyWebServer(socketserver.BaseRequestHandler):
                 continue
             else:
                 current_level += 1
-                if current_level == root_level:
-                    malicious = True if each != "www" else False
-        return malicious or current_level < root_level
+                
+            if current_level < 0:
+                return True
+        return False
 
     def get_mime_type(self, file_name):
         if file_name.endswith('.html'):
