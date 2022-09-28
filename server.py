@@ -70,7 +70,7 @@ class MyWebServer(socketserver.BaseRequestHandler):
             else:
                 current_level += 1
                 if current_level == root_level:
-                    malicious = True if each != "root" else False
+                    malicious = True if each != "www" else False
         return malicious or current_level < root_level
 
     def get_mime_type(self, file_name):
