@@ -30,36 +30,39 @@ import os
 class MyWebServer(socketserver.BaseRequestHandler):
     def handle(self):
         self.data = self.request.recv(1024).decode()
-        self.headers = self.data.split('\n')
+        self.headers = self.data.split('\r\n')
+        for each in self.headers:
+            if each.startswith("Host:"):
+                self.host = each.split(": ")[-1]
         self.method, self.file_name = self.headers[0].split()[0], self.headers[0].split()[1]
         # if header is get then go on 
         if self.method == "GET":
-            response = self.process_file_name(self.file_name)
+            response = self.process_file_name()
         # if header is anything else return 405 Method not allowed
         else:
-            response = 'HTTP/1.0 405 Method Not Allowed'
+            response = 'HTTP/1.1 405 Method Not Allowed'
         self.request.sendall(response.encode())
             
-    def process_file_name(self, file_name):
+    def process_file_name(self):
+        # if it is a folder but it's missing a slash, redirect
+        if os.path.isdir(self.file_name[1:]) and not self.file_name.endswith('/'):
+            return f'HTTP/1.1 301 Moved Permanently\r\nLocation: http://{self.host + self.file_name}/\r\n\r\n'
+        # if the file ends with a / default to finding the index.html file in that folder
+        if self.file_name.endswith('/'):
+            self.file_name += 'index.html'
         try:
-            # if it is a folder but it's missing a slash, redirect
-            if os.path.isdir(file_name[1:]+'/') and not file_name.endswith('/'):
-                return f'HTTP/1.1 301 Moved Permanently\nLocation: http://127.0.0.1:8080{file_name}/\n\n'
-            # if the file ends with a / default to finding the index.html file in that folder
-            if file_name.endswith('/'):
-                file_name = file_name + 'index.html'
-            if self.is_malicious(file_name):
+            if self.is_malicious():
                 raise Exception("Malicious")
-            fin = open('.'+file_name)
+            fin = open('.'+self.file_name)
             content = fin.read()
             fin.close()
-            return 'HTTP/1.0 200 OK\n' + self.get_mime_type(file_name) + content
+            return 'HTTP/1.1 200 OK\r\n' + self.get_mime_type() + content
         except:
-            return 'HTTP/1.0 404 Not FOUND\n\n'
+            return 'HTTP/1.1 404 Not FOUND\r\n\r\n'
 
-    def is_malicious(self, file_name):
+    def is_malicious(self):
         current_level = 0
-        folder_parse = file_name.split('/')
+        folder_parse = self.file_name.split('/')
         for each in folder_parse:
             if each == "..":
                 current_level -= 1
@@ -72,13 +75,13 @@ class MyWebServer(socketserver.BaseRequestHandler):
                 return True
         return False
 
-    def get_mime_type(self, file_name):
-        if file_name.endswith('.html'):
-            return 'Content-Type: text/html\n\n'
-        elif file_name.endswith('.css'):
-            return 'Content-Type: text/css\n\n'
+    def get_mime_type(self):
+        if self.file_name.endswith('.html'):
+            return 'Content-Type: text/html\r\n\r\n'
+        elif self.file_name.endswith('.css'):
+            return 'Content-Type: text/css\r\n\r\n'
         else:
-            return 'Content-Type: text/plain\n\n'
+            return 'Content-Type: text/plain\r\n\r\n'
 
 if __name__ == "__main__":
     os.chdir('./www')
